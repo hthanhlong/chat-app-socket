@@ -2,49 +2,32 @@ import { Kafka, Producer, Consumer } from 'kafkajs'
 import LoggerService from './LoggerService'
 
 class KafkaService {
-  static kafka: Kafka
-  static kafkaProducer: Producer
-  static kafkaConsumer: Consumer
+  static _kafka: Kafka
+  static _kafkaProducer: Producer
+  static _kafkaConsumerFriendsService: Consumer
 
   static async initKafka() {
-    this.kafka = new Kafka({
+    this._kafka = new Kafka({
       clientId: 'chat-app',
       brokers: ['localhost:19092']
     })
+    this._kafkaProducer = this.createKafkaProducer()
+    this._kafkaConsumerFriendsService =
+      this.createKafkaConsumer('friends-service')
     await this._checkKafkaConnection()
-    this.kafkaProducer = await this.getKafkaProducer()
-    this.kafkaConsumer = await this.getKafkaConsumer('chat-app-consumer')
   }
 
-  static async getKafkaProducer() {
-    this.kafkaProducer = this.kafka.producer()
-    try {
-      await this.kafkaProducer.connect()
-    } catch (error) {
-      LoggerService.error({
-        where: 'KafkaService',
-        message: `❌ Kafka producer connection failed: ${error}`
-      })
-    }
-    return this.kafkaProducer
+  static createKafkaProducer() {
+    return this._kafka.producer()
   }
 
-  static async getKafkaConsumer(groupId: string) {
-    this.kafkaConsumer = this.kafka.consumer({ groupId })
-    try {
-      await this.kafkaConsumer.connect()
-    } catch (error) {
-      LoggerService.error({
-        where: 'KafkaService',
-        message: `❌ Kafka consumer connection failed: ${error}`
-      })
-    }
-    return this.kafkaConsumer
+  static createKafkaConsumer(groupId: string) {
+    return this._kafka.consumer({ groupId })
   }
 
   static async _checkKafkaConnection() {
     try {
-      const admin = this.kafka.admin()
+      const admin = this._kafka.admin()
       await admin.connect()
       LoggerService.info({
         where: 'KafkaService',
@@ -62,6 +45,34 @@ class KafkaService {
         message: `❌ Kafka connection failed: ${error}`
       })
     }
+  }
+
+  static async produceFriendsService(userUuid: string) {
+    await this._kafkaProducer.connect()
+    // produce friends service request
+    this._kafkaProducer.send({
+      topic: 'friends-service-request',
+      messages: [{ value: JSON.stringify({ userUuid }) }]
+    })
+  }
+
+  static async consumeFriendsService() {
+    await this._kafkaConsumerFriendsService.connect()
+    let friends: string[] = []
+    // consume friends service response
+    this._kafkaConsumerFriendsService.subscribe({
+      topic: 'friends-service-response',
+      fromBeginning: true
+    })
+    this._kafkaConsumerFriendsService.run({
+      eachMessage: async ({ topic, partition, message }) => {
+        const value = message.value?.toString()
+        if (value) {
+          friends.push(JSON.parse(value))
+        }
+      }
+    })
+    return friends
   }
 }
 

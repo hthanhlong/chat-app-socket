@@ -157,21 +157,24 @@ class WsService {
         clearTimeout(WsService.setTimeoutIds.get(`trigger-offline-${userUuid}`))
       }
 
-      // const timeoutId = setTimeout(async () => {
-      //   const friendsIsOnline = await WsService.filterOnlineUsers(userUuid);
-      //   if (Array.isArray(friendsIsOnline) && friendsIsOnline.length === 0)
-      //     return;
-      //   friendsIsOnline.forEach((uuid: string) => {
-      //     WsService.sendDataToClientByUuid(uuid, {
-      //       type: WsService.SOCKET_EVENTS.HAS_NEW_ONLINE_USER,
-      //       payload: {
-      //         uuid: userUuid,
-      //       },
-      //     });
-      //   });
-      //   resolve(true);
-      // }, 10000);
-      // WsService.setTimeoutIds.set(`trigger-online-${userUuid}`, timeoutId);
+      const timeoutId = setTimeout(async () => {
+        const friendsIsOnline = await WsHelper.filterOnlineUsers(
+          WsService.clientSockets,
+          userUuid
+        )
+        if (Array.isArray(friendsIsOnline) && friendsIsOnline.length === 0)
+          return
+        friendsIsOnline.forEach((uuid: string) => {
+          WsService._sendDataToClientByUuid(uuid, {
+            type: WsService.SOCKET_EVENTS.HAS_NEW_ONLINE_USER,
+            payload: {
+              uuid: userUuid
+            }
+          })
+        })
+        resolve(true)
+      }, 10000)
+      WsService.setTimeoutIds.set(`trigger-online-${userUuid}`, timeoutId)
     })
   }
 
@@ -189,22 +192,25 @@ class WsService {
         clearTimeout(WsService.setTimeoutIds.get(`trigger-online-${userUuid}`))
       }
 
-      // const timeoutId = setTimeout(async () => {
-      //   const friendsIsOnline = await WsService.filterOnlineUsers(userUuid);
-      //   if (Array.isArray(friendsIsOnline) && friendsIsOnline.length === 0)
-      //     return;
-      //   friendsIsOnline.forEach((uuid: string) => {
-      //     WsService.sendDataToClientByUuid(uuid, {
-      //       type: WsService.SOCKET_EVENTS.HAS_NEW_OFFLINE_USER,
-      //       payload: {
-      //         uuid: userUuid,
-      //       },
-      //     });
-      //   });
-      //   WsService.clientSockets.delete(userUuid);
-      //   resolve(true);
-      // }, 8000);
-      // WsService.setTimeoutIds.set(`trigger-offline-${userUuid}`, timeoutId);
+      const timeoutId = setTimeout(async () => {
+        const friendsIsOnline = await WsHelper.filterOnlineUsers(
+          WsService.clientSockets,
+          userUuid
+        )
+        if (Array.isArray(friendsIsOnline) && friendsIsOnline.length === 0)
+          return
+        friendsIsOnline.forEach((uuid: string) => {
+          WsService._sendDataToClientByUuid(uuid, {
+            type: WsService.SOCKET_EVENTS.HAS_NEW_OFFLINE_USER,
+            payload: {
+              uuid: userUuid
+            }
+          })
+        })
+        WsService.clientSockets.delete(userUuid);
+        resolve(true);
+      }, 8000);
+      WsService.setTimeoutIds.set(`trigger-offline-${userUuid}`, timeoutId);
     })
   }
 

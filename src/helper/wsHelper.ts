@@ -1,5 +1,5 @@
 import { Socket } from 'socket.io/dist/socket'
-
+import KafkaService from '../core/services/kafkaService'
 type ClientSocket = {
   id: string
   socket: Socket
@@ -29,10 +29,11 @@ class WsHelper {
     userUuid: string
   ) => {
     const clients = WsHelper.getClientSockets(clientSockets)
-    // const friends = await FriendShipService.getMyFriendsByUuid(userUuid);
-    // return clientSockets.filter((uuid: string) =>
-    //   friends?.some((friend: any) => friend.uuid === uuid)
-    // );
+    await KafkaService.produceFriendsService(userUuid)
+    const friends = await KafkaService.consumeFriendsService()
+    return clients.filter((uuid: string) =>
+      friends?.some((friend: any) => friend.uuid === uuid)
+    )
   }
 }
 
