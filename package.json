@@ -7,23 +7,27 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
+    "dev": "nodemon src/server.ts",
+    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "ws": "^8.18.1",
+    "cls-hooked": "^4.2.2",
     "dotenv": "^16.4.7",
+    "express": "^5.1.0",
     "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "nodemon": "^3.1.9",
+    "socket.io": "^4.8.1",
+    "uuid": "^11.1.0",
     "winston": "^3.11.0",
     "winston-daily-rotate-file": "^5.0.0",
-    "uuid": "^11.1.0",
-    "cls-hooked": "^4.2.2"
+    "ws": "^8.18.1"
   },
   "devDependencies": {
     "@types/cls-hooked": "^4.3.9",
-    "@types/jsonwebtoken": "^9.0.9",
     "@types/express": "^5.0.1",
+    "@types/jsonwebtoken": "^9.0.9",
     "@types/ws": "^8.18.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
