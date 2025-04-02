@@ -1,6 +1,5 @@
 import express from 'express'
 import { Server, Socket } from 'socket.io'
-import { createServer } from 'http'
 import envConfig from './config'
 import JWTService from './core/services/JWTService'
 import WsService from './core/services/WsService'
@@ -25,7 +24,6 @@ const main = async () => {
     const data: JWT_PAYLOAD = JWTService.verifyAccessToken(
       accessToken as string
     )
-
     WsService.onConnection(socket, data)
   })
 
