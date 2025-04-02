@@ -5,9 +5,10 @@ import JWTService from './core/services/JWTService'
 import WsService from './core/services/WsService'
 import { JWT_PAYLOAD } from './type'
 import LoggerService from './core/services/LoggerService'
-
+import KafkaService from './core/services/kafkaService'
 const main = async () => {
   LoggerService.initLogger()
+  await KafkaService.initKafka()
   const io = new Server({
     cors: {
       origin: '*',
