@@ -1,0 +1,47 @@
+# Add any directories, files, or patterns you don't want to be tracked by version control
+.idea
+
+# ignore vs code project config files
+.vs
+
+# ignore logs
+logs
+*.log
+
+# ignore 3rd party lib
+node_modules
+
+# ignore key
+*.pem
+
+# Ignore built files
+dist
+
+# ignore test converage
+coverage
+
+# Environment varibles
+*.env
+*.env.local
+*.env.production
+*.env.test
+*.env.development
+*.env.staging
+*.env.production
+
+#keys
+keys/*
+!keys/*.md
+!keys/*.example
+
+#temp
+temp
+.DS_Store
+
+*.save
+*.save.*
+
+ecosystem.config.js
+
+#prisma
+prisma/migrations/*

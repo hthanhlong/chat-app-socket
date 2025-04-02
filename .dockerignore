@@ -1,0 +1,9 @@
+node_modules
+package-lock.json
+dist
+.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production
+.env.sample
