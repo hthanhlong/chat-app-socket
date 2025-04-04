@@ -1,4 +1,3 @@
-import express from 'express'
 import { Server, Socket } from 'socket.io'
 import envConfig from './config'
 import JWTService from './core/services/JWTService'
@@ -10,7 +9,6 @@ import KafkaService from './core/services/KafkaService'
 const main = async () => {
   LoggerService.init()
   KafkaService.init()
-  WsService.init()
   const io = new Server({
     cors: {
       origin: '*',
