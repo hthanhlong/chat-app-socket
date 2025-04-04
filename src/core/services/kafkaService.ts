@@ -1,79 +1,115 @@
 import { Kafka, Producer, Consumer } from 'kafkajs'
 import LoggerService from './LoggerService'
+import EmitterService from './EmitterService'
 
 class KafkaService {
-  static _kafka: Kafka
-  static _kafkaProducer: Producer
-  static _kafkaConsumerFriendsService: Consumer
+  kafka: Kafka | undefined
+  kafkaProducer: Producer | undefined
+  kafkaConsumer: Consumer | undefined
 
-  static async initKafka() {
-    this._kafka = new Kafka({
+  init() {
+    this.kafka = new Kafka({
       clientId: 'chat-app',
       brokers: ['localhost:19092']
     })
-    this._kafkaProducer = this.createKafkaProducer()
-    this._kafkaConsumerFriendsService =
-      this.createKafkaConsumer('friends-service')
-    await this._checkKafkaConnection()
+    this.kafkaProducer = this.initProducer()
+    this.kafkaConsumer = this.initConsumer('ws-friends-service')
+    this.consumeMessageFromTopic('friends-service-response')
+    this._checkKafkaConnection()
   }
 
-  static createKafkaProducer() {
-    return this._kafka.producer()
+  initProducer() {
+    return this.kafka?.producer()
   }
 
-  static createKafkaConsumer(groupId: string) {
-    return this._kafka.consumer({ groupId })
+  initConsumer(groupId: string) {
+    return this.kafka?.consumer({
+      groupId: groupId,
+      sessionTimeout: 30000, // 30 seconds
+      heartbeatInterval: 3000, // 3 seconds
+      maxBytes: 1024 * 1024, // 1MB
+      retry: {
+        initialRetryTime: 100,
+        retries: 8
+      }
+    })
   }
 
-  static async _checkKafkaConnection() {
+  async _checkKafkaConnection() {
     try {
-      const admin = this._kafka.admin()
+      const admin = this.kafka?.admin()
+      if (!admin) return
       await admin.connect()
       LoggerService.info({
         where: 'KafkaService',
-        message: '✅ Kafka connected successfully!'
-      })
-      const topics = await admin.listTopics()
-      LoggerService.info({
-        where: 'KafkaService',
-        message: `Available topics: ${topics}`
+        message: 'Kafka connected successfully!'
       })
       await admin.disconnect()
     } catch (error) {
       LoggerService.error({
         where: 'KafkaService',
-        message: `❌ Kafka connection failed: ${error}`
+        message: `Kafka connection failed: ${error}`
       })
     }
   }
 
-  static async produceFriendsService(userUuid: string) {
-    await this._kafkaProducer.connect()
-    // produce friends service request
-    this._kafkaProducer.send({
-      topic: 'friends-service-request',
-      messages: [{ value: JSON.stringify({ userUuid }) }]
-    })
+  async produceMessageToTopic<T>({
+    topic,
+    value,
+    key
+  }: {
+    topic: string
+    value: T
+    key: string
+  }) {
+    try {
+      if (!this.kafkaProducer) return
+      await this.kafkaProducer.connect()
+      await this.kafkaProducer.send({
+        topic,
+        messages: [{ key: JSON.stringify(key), value: JSON.stringify(value) }]
+      })
+    } catch (error) {
+      LoggerService.error({
+        where: 'KafkaService',
+        message: `Error producing message to topic ${topic}: ${error}`
+      })
+      throw error
+    } finally {
+      if (!this.kafkaProducer) return
+      await this.kafkaProducer.disconnect()
+    }
   }
 
-  static async consumeFriendsService() {
-    await this._kafkaConsumerFriendsService.connect()
-    let friends: string[] = []
-    // consume friends service response
-    this._kafkaConsumerFriendsService.subscribe({
-      topic: 'friends-service-response',
+  async consumeMessageFromTopic(topic: string) {
+    if (!this.kafkaConsumer) return
+    await this.kafkaConsumer.connect()
+    await this.kafkaConsumer.subscribe({
+      topic: topic,
       fromBeginning: true
     })
-    this._kafkaConsumerFriendsService.run({
-      eachMessage: async ({ topic, partition, message }) => {
-        const value = message.value?.toString()
-        if (value) {
-          friends.push(JSON.parse(value))
+
+    await this.kafkaConsumer.run({
+      autoCommit: true,
+      eachMessage: async ({ message }) => {
+        try {
+          const value = message.value?.toString()
+          const key = message.key?.toString()
+          if (key && value) {
+            EmitterService.kafkaEmitter.emit('GET_ONLINE_USERS', {
+              key: JSON.parse(key),
+              value: JSON.parse(value)
+            })
+          }
+        } catch (error) {
+          LoggerService.error({
+            where: 'KafkaService',
+            message: `Error processing Kafka message: ${error}`
+          })
         }
       }
     })
-    return friends
   }
 }
 
-export default KafkaService
+export default new KafkaService()

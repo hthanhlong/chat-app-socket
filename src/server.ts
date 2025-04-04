@@ -5,10 +5,12 @@ import JWTService from './core/services/JWTService'
 import WsService from './core/services/WsService'
 import { JWT_PAYLOAD } from './type'
 import LoggerService from './core/services/LoggerService'
-import KafkaService from './core/services/kafkaService'
+import KafkaService from './core/services/KafkaService'
+
 const main = async () => {
-  LoggerService.initLogger()
-  await KafkaService.initKafka()
+  LoggerService.init()
+  KafkaService.init()
+  WsService.init()
   const io = new Server({
     cors: {
       origin: '*',
@@ -16,16 +18,26 @@ const main = async () => {
     }
   })
 
-  io.on('connection', (socket: Socket) => {
+  io.on('connection', async (socket: Socket) => {
     const accessToken = socket.handshake.query.accessToken
     if (!accessToken) {
       socket.disconnect()
       return
     }
-    const data: JWT_PAYLOAD = JWTService.verifyAccessToken(
+    const data: JWT_PAYLOAD = await JWTService.verifyAccessToken(
       accessToken as string
     )
-    WsService.onConnection(socket, data)
+    if (!data) {
+      socket.disconnect()
+      return
+    } else {
+      WsService.onConnection(socket, {
+        uuid: data.uuid,
+        id: data.id,
+        name: data.name,
+        nickName: data.nickName
+      })
+    }
   })
 
   io.listen(envConfig.SOCKET_PORT as number)

@@ -9,19 +9,6 @@ declare global {
     }
   }
 
-  interface signUpInput {
-    nickName: string
-    username: string
-    email: string
-    password: string
-    caption?: string
-  }
-
-  interface SignInInput {
-    email: string
-    password: string
-  }
-
   interface FriendRequest {
     senderId: number
     senderUuid: string
@@ -38,11 +25,6 @@ declare global {
     status: 'UNREAD' | 'READ'
   }
 
-  interface sendDataToIdByWs {
-    type: string
-    payload?: unknown
-  }
-
   interface JWT_PAYLOAD {
     id: number
     uuid: string
@@ -50,59 +32,20 @@ declare global {
     nickName: string
   }
 
-  interface IWebSocket {
-    type: string
-    payload?: unknown
-  }
-
-  interface ISocketEventGetOnlineUsers {
-    userUuid: string
-  }
-
-  interface ISocketEventSendMessage {
+  type IFriend = {
     uuid: string
-    message: string
-    receiverUuid: string
+    nickName: string
+    name: string
+    profilePicUrl: string
+    caption: string
+  }
+
+  type MessagePayload = {
+    uuid: string
     senderUuid: string
-    createdAt: Date
-  }
-
-  interface ISocketEventHasNewMessage {
-    senderId: number
     receiverUuid: string
     message: string
-    createdAt: Date
-  }
-
-  interface ISocketEventUpdateFriendList {
-    userId: number
-  }
-
-  interface ISocketEventCloseConnection {
-    userId: number
-  }
-
-  interface ISocketEventGetFriendList {
-    userId: number
-  }
-
-  interface ISocketEventGetFriendRequest {
-    userId: number
-  }
-
-  interface ISocketEventSendFriendRequest {
-    senderId: number
-    receiverUuid: string
-  }
-
-  interface ISocketEventAcceptFriendRequest {
-    senderId: number
-    receiverUuid: string
-  }
-
-  interface ISocketEventRejectFriendRequest {
-    senderId: number
-    receiverUuid: string
+    createdAt: string
   }
 }
 
