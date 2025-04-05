@@ -15,10 +15,16 @@ type EmitterEventPayload<T> = {
   data: T
 }
 
+type FriendListPayload = {
+  uuid: string
+  data: string[]
+}
+
 class WsService {
   SOCKET_EVENTS = {
     // User
     GET_ONLINE_USERS: 'GET_ONLINE_USERS',
+    ANNOUNCE_I_AM_ONLINE_TO_FRIENDS: 'ANNOUNCE_I_AM_ONLINE_TO_FRIENDS',
     HAS_NEW_ONLINE_USER: 'HAS_NEW_ONLINE_USER',
     HAS_NEW_OFFLINE_USER: 'HAS_NEW_OFFLINE_USER',
     // Message
@@ -45,20 +51,20 @@ class WsService {
   onConnection = async (socket: Socket, data: JWT_PAYLOAD): Promise<void> => {
     try {
       if (!data.uuid) return
-      this._socketRegister(socket, data)
-      await this._getOnlineFriends(data)
-      // User
-      socket.on(this.SOCKET_EVENTS.GET_ONLINE_USERS, (payload: JWT_PAYLOAD) =>
-        this._getOnlineFriends(payload)
+      this.socketRegister(socket, data)
+      socket.on(
+        this.SOCKET_EVENTS.GET_ONLINE_USERS,
+        (payload: FriendListPayload) => this.getOnlineFriends(payload)
       )
-      // Message
+      socket.on(
+        this.SOCKET_EVENTS.ANNOUNCE_I_AM_ONLINE_TO_FRIENDS,
+        (payload: FriendListPayload) => this.handleAnUserOnline(payload)
+      )
       socket.on(this.SOCKET_EVENTS.SEND_MESSAGE, (payload: MessagePayload) =>
-        this._handleSendMessage(payload)
+        this.handleSendMessage(payload)
       )
-      // Disconnect
-      socket.on('disconnect', () => this._handleDisconnect(data))
-      // Error
-      socket.on('error', (err: any) => this._onError(socket, err))
+      socket.on('disconnect', () => this.handleDisconnect(socket, data))
+      socket.on('error', (err: any) => this.onError(socket, err))
     } catch (error: Error | any) {
       socket.disconnect()
       LoggerService.error({
@@ -68,12 +74,7 @@ class WsService {
     }
   }
 
-  getSocketsByUuid = (uuid: string) => {
-    if (!uuid) throw new Error('Uuid is required')
-    return this.socketClients.get(uuid)
-  }
-
-  _socketRegister = (socket: Socket, data: JWT_PAYLOAD) => {
+  socketRegister = (socket: Socket, data: JWT_PAYLOAD) => {
     try {
       if (!this.socketClients.has(data.uuid)) {
         this.socketClients.set(data.uuid, [
@@ -97,19 +98,19 @@ class WsService {
     }
   }
 
-  _sendDataToClient = (uuid: string, data: any) => {
-    const clients = this.getSocketsByUuid(uuid)
+  sendDataToClient = (uuid: string, data: any) => {
+    const clients = this.socketClients.get(uuid)
     if (!clients || clients.length === 0) return
     clients.forEach(({ socket }: ISocketInstance) =>
       socket.emit(data.type, data.payload)
     )
   }
 
-  async _handleSendMessage(payload: MessagePayload): Promise<void> {
+  handleSendMessage = (payload: MessagePayload) => {
     try {
       const { senderUuid, receiverUuid, message, createdAt } = payload
       // Handle message sending
-      this._sendDataToClient(receiverUuid, {
+      this.sendDataToClient(receiverUuid, {
         type: this.SOCKET_EVENTS.HAS_NEW_MESSAGE,
         payload: {
           senderUuid,
@@ -126,9 +127,16 @@ class WsService {
     }
   }
 
-  async _getOnlineFriends(payload: JWT_PAYLOAD): Promise<void> {
+  getOnlineFriends = (payload: FriendListPayload) => {
+    const { uuid, data } = payload
+    if (!uuid || !data) {
+      LoggerService.error({
+        where: 'WsService',
+        message: 'Uuid and data are required'
+      })
+      return
+    }
     try {
-      const { uuid } = payload
       if (!uuid) {
         LoggerService.error({
           where: 'WsService',
@@ -136,75 +144,89 @@ class WsService {
         })
         return
       }
-      const requestId = uuidv4()
-      KafkaService.produceMessageToTopic('friends-service-request', {
-        requestId,
-        data: {
-          event: 'GET_FRIEND_LIST',
-          uuid
+      if (Array.isArray(data) && data.length === 0) return
+      const onlineFriends: string[] = []
+      data.forEach((uuid: string) => {
+        if (this.socketClients.has(uuid)) {
+          onlineFriends.push(uuid)
         }
       })
-      EmitterService.kafkaEmitter.on(
-        'GET_FRIEND_LIST',
-        this._handleSendFriendsList(requestId)
-      )
+      if (onlineFriends.length === 0) return
+      this.sendDataToClient(uuid, {
+        type: this.SOCKET_EVENTS.GET_ONLINE_USERS,
+        payload: onlineFriends
+      })
     } catch (error: Error | any) {
       LoggerService.error({
         where: 'WsService',
-        message: `Error handling get online users: ${error.message}`
+        message: `Error handling get online friends: ${error.message}`
       })
     }
   }
 
-  _triggerUpdateOnlineUsers = async (data: JWT_PAYLOAD) => {
-    return new Promise((resolve) => {
-      if (!data.uuid) return
-      const userUuid = data.uuid
-      // check if user reconnect, we will clear the timeout
-      if (this.setTimeoutIds.has(`trigger-online-${userUuid}`)) {
-        clearTimeout(this.setTimeoutIds.get(`trigger-online-${userUuid}`))
-        resolve(true)
+  handleAnUserOnline = async (payload: FriendListPayload) => {
+    const { uuid, data } = payload
+    if (!uuid || !data) {
+      LoggerService.error({
+        where: 'WsService',
+        message: 'Uuid and data are required'
+      })
+      return
+    }
+    const TIMEOUT_HANDLE_AN_USER_ONLINE = 10000 // 10 seconds
+    try {
+      if (this.setTimeoutIds.has(`trigger-disconnect-${uuid}`)) {
+        clearTimeout(this.setTimeoutIds.get(`trigger-disconnect-${uuid}`))
       }
-      if (this.setTimeoutIds.has(`trigger-offline-${userUuid}`)) {
-        clearTimeout(this.setTimeoutIds.get(`trigger-offline-${userUuid}`))
+      if (this.setTimeoutIds.has(`trigger-online-${uuid}`)) {
+        clearTimeout(this.setTimeoutIds.get(`trigger-online-${uuid}`))
       }
+      const timeoutId = setTimeout(() => {
+        data.forEach((friendUuid: string) => {
+          if (this.socketClients.has(friendUuid)) {
+            this.sendDataToClient(friendUuid, {
+              type: this.SOCKET_EVENTS.HAS_NEW_ONLINE_USER,
+              payload: uuid
+            })
+          }
+        })
+      }, TIMEOUT_HANDLE_AN_USER_ONLINE)
+      this.setTimeoutIds.set(`trigger-online-${uuid}`, timeoutId)
+    } catch (error: Error | any) {
+      LoggerService.error({
+        where: 'WsService',
+        message: `Error handling an user online: ${error.message}`
+      })
+    }
+  }
 
-      // const timeoutId = setTimeout(async () => {
-      //   const friendsIsOnline = await WsHelper.filterOnlineUsers(
-      //     WsService.clientSockets,
-      //     userUuid
-      //   )
-      //   if (Array.isArray(friendsIsOnline) && friendsIsOnline.length === 0)
-      //     return
-      //   friendsIsOnline.forEach((uuid: string) => {
-      //     WsService._sendDataToClientByUuid(uuid, {
-      //       type: WsService.SOCKET_EVENTS.HAS_NEW_ONLINE_USER,
-      //       payload: {
-      //         uuid: userUuid
-      //       }
-      //     })
-      //   })
-      //   resolve(true)
-      // }, 10000)
-      // WsService.setTimeoutIds.set(`trigger-online-${userUuid}`, timeoutId)
+  onError = (socket: any, error: Error) => {
+    LoggerService.error({
+      where: 'WsService',
+      message: `Error on socket: ${error.message}`
     })
   }
 
-  _handleAnUserOffline = async (data: JWT_PAYLOAD) => {
-    return new Promise((resolve) => {
-      if (!data.uuid) return
-      const userUuid = data.uuid
+  handleDisconnect = async (socket: Socket, data: JWT_PAYLOAD) => {
+    if (!data.uuid) {
+      socket.disconnect()
+      return
+    }
+    const userUuid = data.uuid
 
-      // check if user reconnect, we will clear the timeout
-      if (this.setTimeoutIds.has(`trigger-offline-${userUuid}`)) {
-        clearTimeout(this.setTimeoutIds.get(`trigger-offline-${userUuid}`))
-        resolve(true)
-      }
-      if (this.setTimeoutIds.has(`trigger-online-${userUuid}`)) {
-        clearTimeout(this.setTimeoutIds.get(`trigger-online-${userUuid}`))
-      }
-      const requestId = uuidv4()
-      const timeoutId = setTimeout(async () => {
+    if (this.setTimeoutIds.has(`trigger-disconnect-${userUuid}`)) {
+      clearTimeout(this.setTimeoutIds.get(`trigger-disconnect-${userUuid}`))
+    }
+
+    if (this.setTimeoutIds.has(`trigger-online-${userUuid}`)) {
+      clearTimeout(this.setTimeoutIds.get(`trigger-online-${userUuid}`))
+    }
+
+    const TIMEOUT_HANDLE_DISCONNECT = 30000 // 30 second
+    const timeoutId = setTimeout(() => {
+      try {
+        const userUuid = data.uuid
+        const requestId = uuidv4()
         KafkaService.produceMessageToTopic('friends-service-request', {
           requestId,
           data: {
@@ -212,56 +234,44 @@ class WsService {
             uuid: userUuid
           }
         })
-        EmitterService.kafkaEmitter.on(
-          'GET_FRIEND_LIST',
-          (
-            payload: EmitterEventPayload<{
-              uuid: string
-              friends: IFriend[]
-            }>
-          ) => {
-            if (!payload.requestId || !payload.data) return
-            const friends = payload.data.friends
-            const me = data.uuid
-            if (Array.isArray(friends) && friends.length === 0) return
-            let onlineUsers: IFriend[] = []
-            friends.forEach((friend: IFriend) => {
-              if (this.socketClients.has(friend.uuid)) {
-                onlineUsers.push(friend)
-              }
+        const handleAnUserOffline = (
+          payload: EmitterEventPayload<{ uuid: string; friends: IFriend[] }>
+        ) => {
+          if (!payload.requestId || !payload.data) return
+          if (requestId !== payload.requestId) return
+          const friends = payload.data.friends
+          if (!friends) return
+          const onlineUsers: IFriend[] = []
+          friends.forEach((friend: IFriend) => {
+            if (this.socketClients.has(friend.uuid)) {
+              onlineUsers.push(friend)
+            }
+          })
+          if (onlineUsers.length === 0) return
+          onlineUsers.forEach((friend: IFriend) => {
+            this.sendDataToClient(friend.uuid, {
+              type: this.SOCKET_EVENTS.HAS_NEW_OFFLINE_USER,
+              payload: userUuid
             })
-            if (onlineUsers.length === 0) return
-            onlineUsers.forEach((friend: IFriend) => {
-              this._sendDataToClient(friend.uuid, {
-                type: this.SOCKET_EVENTS.HAS_NEW_OFFLINE_USER,
-                payload: { uuid: me }
-              })
-            })
-            this.socketClients.delete(userUuid)
-            resolve(true)
-          }
-        )
-      }, 60 * 1000) // 1 minutes
-      this.setTimeoutIds.set(`trigger-offline-${userUuid}`, timeoutId)
-    })
+          })
+          this.socketClients.delete(userUuid)
+          EmitterService.kafkaEmitter.off(
+            'GET_FRIEND_LIST',
+            handleAnUserOffline
+          )
+        }
+        EmitterService.kafkaEmitter.on('GET_FRIEND_LIST', handleAnUserOffline)
+      } catch (error: Error | any) {
+        LoggerService.error({
+          where: 'WsService',
+          message: `Error handling disconnect: ${error.message}`
+        })
+      }
+    }, TIMEOUT_HANDLE_DISCONNECT) // 30 seconds
+    this.setTimeoutIds.set(`trigger-disconnect-${userUuid}`, timeoutId)
   }
 
-  _onError = (socket: any, error: Error) => {
-    LoggerService.error({
-      where: 'WsService',
-      message: `Error on socket: ${error.message}`
-    })
-  }
-
-  _handleDisconnect = async (data: JWT_PAYLOAD) => {
-    await this._handleAnUserOffline(data)
-    LoggerService.info({
-      where: 'WsService',
-      message: `User ${data.uuid} disconnected`
-    })
-  }
-
-  _handleSendFriendsList =
+  handleSendFriendsList =
     (requestId: string) =>
     async (
       payload: EmitterEventPayload<{
@@ -276,7 +286,7 @@ class WsService {
       ) {
         EmitterService.kafkaEmitter.off(
           'GET_FRIEND_LIST',
-          this._handleSendFriendsList(requestId)
+          this.handleSendFriendsList(requestId)
         )
         return
       }
@@ -289,13 +299,13 @@ class WsService {
           onlineUsers.push(friend)
         }
       })
-      this._sendDataToClient(uuid, {
+      this.sendDataToClient(uuid, {
         type: this.SOCKET_EVENTS.GET_ONLINE_USERS,
         payload: onlineUsers
       })
       EmitterService.kafkaEmitter.off(
         'GET_FRIEND_LIST',
-        this._handleSendFriendsList(requestId)
+        this.handleSendFriendsList(requestId)
       )
     }
 }

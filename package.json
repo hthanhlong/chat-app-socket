@@ -26,6 +26,7 @@
     "ws": "^8.18.1"
   },
   "devDependencies": {
+    "@types/helmet": "^0.0.48",
     "@types/cls-hooked": "^4.3.9",
     "@types/express": "^5.0.1",
     "@types/jsonwebtoken": "^9.0.9",
