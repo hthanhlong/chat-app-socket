@@ -5,7 +5,9 @@ import EmitterService from './EmitterService'
 class KafkaService {
   kafka: Kafka | undefined
   kafkaProducer: Producer | undefined
-  kafkaConsumer: Consumer | undefined
+  notificationConsumer: Consumer | undefined
+  friendConsumer: Consumer | undefined
+  messageConsumer: Consumer | undefined
 
   init() {
     this.kafka = new Kafka({
@@ -13,8 +15,14 @@ class KafkaService {
       brokers: ['localhost:19092']
     })
     this.kafkaProducer = this.initProducer()
-    this.kafkaConsumer = this.initConsumer('ws-friends-service')
-    this.consumeMessageFromTopic('friends-service-response')
+    this.friendConsumer = this.initConsumer('ws-friend-group')
+    this.notificationConsumer = this.initConsumer('ws-notification-group')
+    this.messageConsumer = this.initConsumer('ws-message-group', {
+      allowAutoTopicCreation: true
+    })
+    this.consumeMessageFromTopicFriendTopic()
+    this.consumeMessageFromTopicNotificationTopic()
+    this.consumeMessageFromTopicMessageTopic()
     this._checkKafkaConnection()
   }
 
@@ -22,7 +30,17 @@ class KafkaService {
     return this.kafka?.producer()
   }
 
-  initConsumer(groupId: string) {
+  disconnectProducer() {
+    if (!this.kafkaProducer) return
+    this.kafkaProducer.disconnect()
+  }
+
+  disconnectConsumer() {
+    this.friendConsumer?.disconnect()
+    this.notificationConsumer?.disconnect()
+  }
+
+  initConsumer(groupId: string, options?: { allowAutoTopicCreation: boolean }) {
     return this.kafka?.consumer({
       groupId: groupId,
       sessionTimeout: 30000, // 30 seconds
@@ -31,7 +49,8 @@ class KafkaService {
       retry: {
         initialRetryTime: 100,
         retries: 8
-      }
+      },
+      ...options
     })
   }
 
@@ -57,7 +76,12 @@ class KafkaService {
     topic: string,
     data: {
       key: string
-      value: T & { requestId: string; eventName: string; uuid: string }
+      value: T & {
+        requestId: string
+        eventName: string
+        uuid: string
+        sendByProducer: 'WS_SERVER'
+      }
     }
   ) {
     try {
@@ -79,28 +103,99 @@ class KafkaService {
     }
   }
 
-  async consumeMessageFromTopic(topic: string) {
-    if (!this.kafkaConsumer) return
-    await this.kafkaConsumer.connect()
-    await this.kafkaConsumer.subscribe({
-      topic: topic,
+  async consumeMessageFromTopicNotificationTopic() {
+    if (!this.notificationConsumer) return
+    await this.notificationConsumer.connect()
+    await this.notificationConsumer.subscribe({
+      topic: 'NOTIFICATION_TOPIC',
       fromBeginning: true
     })
-
-    await this.kafkaConsumer.run({
+    await this.notificationConsumer.run({
       autoCommit: true,
       eachMessage: async ({ message }) => {
         try {
           const value = message.value?.toString()
           if (!value) return
-          const _value = JSON.parse(value)
-          const { requestId, uuid, friendList, eventName } = _value || {}
-          if (requestId && uuid && friendList && eventName) {
-            EmitterService.kafkaEmitter.emit(eventName, {
-              requestId,
-              uuid,
-              friendList
-            })
+          const _value = JSON.parse(value) as {
+            requestId: string
+            uuid: string
+            eventName: string
+            sendByProducer: unknown
+          }
+          if (_value.sendByProducer === 'WS_SERVER') return
+          const { eventName } = _value || {}
+          if (eventName) {
+            EmitterService.notificationEmitter.emit(eventName, _value)
+          }
+        } catch (error) {
+          LoggerService.error({
+            where: 'KafkaService',
+            message: `Error processing Kafka message: ${error}`
+          })
+        }
+      }
+    })
+  }
+
+  async consumeMessageFromTopicFriendTopic() {
+    if (!this.friendConsumer) return
+    await this.friendConsumer.connect()
+    await this.friendConsumer.subscribe({
+      topic: 'FRIEND_TOPIC',
+      fromBeginning: true
+    })
+
+    await this.friendConsumer.run({
+      autoCommit: true,
+      eachMessage: async ({ message }) => {
+        try {
+          const value = message.value?.toString() as string
+          if (!value) return
+          const _value = JSON.parse(value) as {
+            requestId: string
+            uuid: string
+            friendList: string[]
+            eventName: string
+            sendByProducer: 'WS_SERVER'
+          }
+          if (_value.sendByProducer === 'WS_SERVER') return
+          const { eventName } = _value || {}
+          if (eventName) {
+            EmitterService.friendEmitter.emit(eventName, _value)
+          }
+        } catch (error) {
+          LoggerService.error({
+            where: 'KafkaService',
+            message: `Error processing Kafka message: ${error}`
+          })
+        }
+      }
+    })
+  }
+
+  async consumeMessageFromTopicMessageTopic() {
+    if (!this.messageConsumer) return
+    await this.messageConsumer.connect()
+    await this.messageConsumer.subscribe({
+      topic: 'MESSAGE_TOPIC',
+      fromBeginning: false
+    })
+    await this.messageConsumer.run({
+      autoCommit: true,
+      eachMessage: async ({ message }) => {
+        try {
+          const value = message.value?.toString()
+          if (!value) return
+          const _value = JSON.parse(value) as {
+            requestId: string
+            uuid: string
+            eventName: string
+            sendByProducer: 'WS_SERVER'
+          }
+          if (_value.sendByProducer === 'WS_SERVER') return
+          const { eventName } = _value || {}
+          if (eventName) {
+            EmitterService.messageEmitter.emit(eventName, _value)
           }
         } catch (error) {
           LoggerService.error({

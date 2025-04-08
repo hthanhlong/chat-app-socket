@@ -1,7 +1,9 @@
 import { EventEmitter } from 'events'
 
 class EmitterService {
-  static kafkaEmitter = new EventEmitter()
+  static friendEmitter = new EventEmitter()
+  static notificationEmitter = new EventEmitter()
+  static messageEmitter = new EventEmitter()
 }
 
 export default EmitterService

@@ -31,7 +31,8 @@ class FriendService {
 
   getOnlineFriends = (payload: SocketEventPayload<string[]>) => {
     const { data } = payload
-    if (Array.isArray(data.value) && data.value.length === 0) return
+    if (!data.value || (Array.isArray(data.value) && data.value.length === 0))
+      return
     const onlineFriends: string[] = []
     const sockets = this.wsService?.socketClients
     if (!sockets) return
@@ -44,7 +45,7 @@ class FriendService {
     this.wsService?.sendDataToClient<string[]>(SOCKET_CHANNEL.FRIEND, {
       eventName: FRIEND_TYPE.GET_ONLINE_FRIEND_LIST,
       data: {
-        uuid: data.uuid,
+        sendToUuid: data.uuid,
         value: onlineFriends
       }
     })
@@ -69,12 +70,18 @@ class FriendService {
     try {
       const timeoutId = setTimeout(() => {
         const sockets = this.wsService?.socketClients
+        if (!sockets) return
+        if (
+          !data.value ||
+          (Array.isArray(data.value) && data.value.length === 0)
+        )
+          return
         data.value.forEach((friendUuid: string) => {
           if (sockets?.has(friendUuid)) {
             this.wsService?.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
               eventName: FRIEND_TYPE.HAS_NEW_ONLINE_USER,
               data: {
-                uuid: friendUuid,
+                sendToUuid: friendUuid,
                 value: data.uuid
               }
             })
@@ -131,27 +138,24 @@ class FriendService {
               this.wsService?.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
                 eventName: FRIEND_TYPE.HAS_NEW_OFFLINE_USER,
                 data: {
-                  uuid: friendUuid,
+                  sendToUuid: friendUuid,
                   value: userUuid
                 }
               })
             })
             this.wsService?.socketClients.delete(userUuid)
-            EmitterService.kafkaEmitter.off(
-              'GET_FRIEND_LIST',
-              _handleAnUserOffline
-            )
           }
-          EmitterService.kafkaEmitter.on(
+          EmitterService.friendEmitter.once(
             'GET_FRIEND_LIST',
             _handleAnUserOffline
           )
-          KafkaService.produceMessageToTopic('friends-service-request', {
+          KafkaService.produceMessageToTopic('FRIEND_TOPIC', {
             key: 'GET_FRIEND_LIST',
             value: {
               requestId: requestId,
               eventName: 'GET_FRIEND_LIST',
-              uuid: userUuid
+              uuid: userUuid,
+              sendByProducer: 'WS_SERVER'
             }
           })
         } catch (error: Error | any) {

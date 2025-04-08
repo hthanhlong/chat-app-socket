@@ -3,7 +3,8 @@ import LoggerService from '../services/LoggerService'
 import { JWT_PAYLOAD } from '../../type'
 import { SOCKET_CHANNEL } from '../../constant'
 import FriendService from './FriendService'
-// import { MessageService, NotificationService } from '.'
+import NotificationService from './NotificationService'
+import MessageService from './MessageService'
 
 class WsService {
   socketClients: Map<string, ISocketInstance[]> = new Map()
@@ -14,16 +15,11 @@ class WsService {
     socket.on(SOCKET_CHANNEL.FRIEND, (payload: SocketEventPayload<string[]>) =>
       FriendService.handle(payload)
     )
-    // socket.on(
-    //   SOCKET_CHANNEL.MESSAGE,
-    //   (payload: SocketEventPayload<MessagePayload>) =>
-    //     MessageService.handleMessageService(payload)
-    // )
-    // socket.on(
-    //   SOCKET_CHANNEL.NOTIFICATION,
-    //   (payload: SocketEventPayload<NotificationPayload>) =>
-    //     NotificationService.handleNotificationService(payload)
-    // )
+    socket.on(
+      SOCKET_CHANNEL.MESSAGE,
+      (payload: SocketEventPayload<MessagePayload>) =>
+        MessageService.handle(payload)
+    )
     socket.on('disconnect', () => this.handleDisconnect(data))
     socket.on('error', (err: any) => this.onError(err))
   }
@@ -60,8 +56,8 @@ class WsService {
     payload: {
       eventName: string
       data: {
-        uuid: string
-        value: T
+        sendToUuid: string
+        value?: T
       }
     }
   ) => {
@@ -80,12 +76,12 @@ class WsService {
       })
       return
     }
-    const clients = this.socketClients.get(data.uuid)
+    const clients = this.socketClients.get(data.sendToUuid)
     if (!clients || clients.length === 0) return
     clients.forEach(({ socket }: ISocketInstance) =>
       socket.emit(channel, {
         eventName,
-        data
+        value: data.value
       })
     )
   }
@@ -104,4 +100,6 @@ class WsService {
 
 const wsService = new WsService()
 FriendService.inject(wsService)
+NotificationService.inject(wsService)
+MessageService.inject(wsService)
 export default wsService

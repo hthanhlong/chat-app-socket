@@ -67,6 +67,15 @@ declare global {
 
   type MessagePayload = {
     uuid: string
+    senderUuid: string
+    receiverUuid: string
+    message: string
+    data: {
+      uuid: string
+      senderUuid: string
+      receiverUuid: string
+      message: string
+    }
   }
 }
 
