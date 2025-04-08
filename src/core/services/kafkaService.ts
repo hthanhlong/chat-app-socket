@@ -7,16 +7,22 @@ class KafkaService {
   kafkaProducer: Producer | undefined
   notificationConsumer: Consumer | undefined
   friendConsumer: Consumer | undefined
+  messageConsumer: Consumer | undefined
+
   init() {
     this.kafka = new Kafka({
       clientId: 'chat-app',
       brokers: ['localhost:19092']
     })
     this.kafkaProducer = this.initProducer()
-    this.friendConsumer = this.initConsumer('friend-consumer-group')
-    this.notificationConsumer = this.initConsumer('notification-consumer-group')
+    this.friendConsumer = this.initConsumer('ws-friend-group')
+    this.notificationConsumer = this.initConsumer('ws-notification-group')
+    this.messageConsumer = this.initConsumer('ws-message-group', {
+      allowAutoTopicCreation: true
+    })
     this.consumeMessageFromTopicFriendTopic()
     this.consumeMessageFromTopicNotificationTopic()
+    this.consumeMessageFromTopicMessageTopic()
     this._checkKafkaConnection()
   }
 
@@ -34,7 +40,7 @@ class KafkaService {
     this.notificationConsumer?.disconnect()
   }
 
-  initConsumer(groupId: string) {
+  initConsumer(groupId: string, options?: { allowAutoTopicCreation: boolean }) {
     return this.kafka?.consumer({
       groupId: groupId,
       sessionTimeout: 30000, // 30 seconds
@@ -43,7 +49,8 @@ class KafkaService {
       retry: {
         initialRetryTime: 100,
         retries: 8
-      }
+      },
+      ...options
     })
   }
 
@@ -109,7 +116,6 @@ class KafkaService {
         try {
           const value = message.value?.toString()
           if (!value) return
-
           const _value = JSON.parse(value) as {
             requestId: string
             uuid: string
@@ -145,7 +151,6 @@ class KafkaService {
         try {
           const value = message.value?.toString() as string
           if (!value) return
-
           const _value = JSON.parse(value) as {
             requestId: string
             uuid: string
@@ -157,6 +162,40 @@ class KafkaService {
           const { eventName } = _value || {}
           if (eventName) {
             EmitterService.friendEmitter.emit(eventName, _value)
+          }
+        } catch (error) {
+          LoggerService.error({
+            where: 'KafkaService',
+            message: `Error processing Kafka message: ${error}`
+          })
+        }
+      }
+    })
+  }
+
+  async consumeMessageFromTopicMessageTopic() {
+    if (!this.messageConsumer) return
+    await this.messageConsumer.connect()
+    await this.messageConsumer.subscribe({
+      topic: 'MESSAGE_TOPIC',
+      fromBeginning: false
+    })
+    await this.messageConsumer.run({
+      autoCommit: true,
+      eachMessage: async ({ message }) => {
+        try {
+          const value = message.value?.toString()
+          if (!value) return
+          const _value = JSON.parse(value) as {
+            requestId: string
+            uuid: string
+            eventName: string
+            sendByProducer: 'WS_SERVER'
+          }
+          if (_value.sendByProducer === 'WS_SERVER') return
+          const { eventName } = _value || {}
+          if (eventName) {
+            EmitterService.messageEmitter.emit(eventName, _value)
           }
         } catch (error) {
           LoggerService.error({

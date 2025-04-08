@@ -137,12 +137,8 @@ class FriendService {
               })
             })
             this.wsService?.socketClients.delete(userUuid)
-            EmitterService.friendEmitter.off(
-              'GET_FRIEND_LIST',
-              _handleAnUserOffline
-            )
           }
-          EmitterService.friendEmitter.on(
+          EmitterService.friendEmitter.once(
             'GET_FRIEND_LIST',
             _handleAnUserOffline
           )

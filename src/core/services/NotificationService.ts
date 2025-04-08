@@ -9,7 +9,7 @@ class NotificationService {
   }
 
   init() {
-    EmitterService.notificationEmitter.on(
+    EmitterService.notificationEmitter.once(
       'HAS_NEW_NOTIFICATION',
       this.handleHasNewNotification
     )
