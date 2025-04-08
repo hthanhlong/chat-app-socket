@@ -31,7 +31,8 @@ class FriendService {
 
   getOnlineFriends = (payload: SocketEventPayload<string[]>) => {
     const { data } = payload
-    if (Array.isArray(data.value) && data.value.length === 0) return
+    if (!data.value || (Array.isArray(data.value) && data.value.length === 0))
+      return
     const onlineFriends: string[] = []
     const sockets = this.wsService?.socketClients
     if (!sockets) return
@@ -69,6 +70,12 @@ class FriendService {
     try {
       const timeoutId = setTimeout(() => {
         const sockets = this.wsService?.socketClients
+        if (!sockets) return
+        if (
+          !data.value ||
+          (Array.isArray(data.value) && data.value.length === 0)
+        )
+          return
         data.value.forEach((friendUuid: string) => {
           if (sockets?.has(friendUuid)) {
             this.wsService?.sendDataToClient(SOCKET_CHANNEL.FRIEND, {

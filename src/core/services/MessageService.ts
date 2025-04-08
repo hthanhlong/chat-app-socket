@@ -10,6 +10,13 @@ class MessageService {
     this.wsService = wsService
   }
 
+  constructor() {
+    EmitterService.messageEmitter.on(
+      MESSAGE_TYPE.NEW_MESSAGE_HAS_IMAGE,
+      this.sendMessageHasImageToReceiver
+    )
+  }
+
   handle = async (payload: SocketEventPayload<MessagePayload>) => {
     const { eventName } = payload
     if (!eventName) return
@@ -26,6 +33,18 @@ class MessageService {
       data: {
         sendToUuid: payload.data.receiverUuid,
         value: payload.data
+      }
+    })
+  }
+
+  sendMessageHasImageToReceiver = (payload: MessagePayload) => {
+    const { data } = payload
+    if (!data) return
+    this.wsService.sendDataToClient(SOCKET_CHANNEL.MESSAGE, {
+      eventName: MESSAGE_TYPE.NEW_MESSAGE,
+      data: {
+        sendToUuid: data.receiverUuid,
+        value: data
       }
     })
   }
