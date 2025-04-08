@@ -1,3 +1,3 @@
-import WsHelper from './wsHelper'
+import WsHelper from './WsHelper'
 
 export { WsHelper }

@@ -53,13 +53,19 @@ class KafkaService {
     }
   }
 
-  async produceMessageToTopic<T>(topic: string, data: T) {
+  async produceMessageToTopic<T>(
+    topic: string,
+    data: {
+      key: string
+      value: T & { requestId: string; eventName: string; uuid: string }
+    }
+  ) {
     try {
       if (!this.kafkaProducer) return
       await this.kafkaProducer.connect()
       await this.kafkaProducer.send({
         topic,
-        messages: [{ value: JSON.stringify(data) }]
+        messages: [{ key: data.key, value: JSON.stringify(data.value) }]
       })
     } catch (error) {
       LoggerService.error({
@@ -88,11 +94,12 @@ class KafkaService {
           const value = message.value?.toString()
           if (!value) return
           const _value = JSON.parse(value)
-          const { requestId, data } = _value || {}
-          if (requestId && data) {
-            EmitterService.kafkaEmitter.emit(data.event, {
+          const { requestId, uuid, friendList, eventName } = _value || {}
+          if (requestId && uuid && friendList && eventName) {
+            EmitterService.kafkaEmitter.emit(eventName, {
               requestId,
-              data: data
+              uuid,
+              friendList
             })
           }
         } catch (error) {

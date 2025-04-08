@@ -1,4 +1,5 @@
 import { Request } from 'express'
+import { Socket } from 'socket.io/dist/socket'
 
 declare global {
   namespace Express {
@@ -40,12 +41,32 @@ declare global {
     caption: string
   }
 
+  type ISocketInstance = {
+    id: string
+    socket: Socket
+  }
+
+  type EmitterEventPayload = {
+    requestId: string
+    uuid: string
+    eventName: string
+  }
+
+  type SocketEventPayload<T> = {
+    eventName: string
+    data: {
+      uuid: string
+      value: T
+    }
+  }
+
+  type NotificationPayload = {
+    uuid: string
+    data: string[]
+  }
+
   type MessagePayload = {
     uuid: string
-    senderUuid: string
-    receiverUuid: string
-    message: string
-    createdAt: string
   }
 }
 
