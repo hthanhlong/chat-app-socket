@@ -44,7 +44,7 @@ class FriendService {
     this.wsService?.sendDataToClient<string[]>(SOCKET_CHANNEL.FRIEND, {
       eventName: FRIEND_TYPE.GET_ONLINE_FRIEND_LIST,
       data: {
-        uuid: data.uuid,
+        sendToUuid: data.uuid,
         value: onlineFriends
       }
     })
@@ -74,7 +74,7 @@ class FriendService {
             this.wsService?.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
               eventName: FRIEND_TYPE.HAS_NEW_ONLINE_USER,
               data: {
-                uuid: friendUuid,
+                sendToUuid: friendUuid,
                 value: data.uuid
               }
             })
@@ -131,27 +131,28 @@ class FriendService {
               this.wsService?.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
                 eventName: FRIEND_TYPE.HAS_NEW_OFFLINE_USER,
                 data: {
-                  uuid: friendUuid,
+                  sendToUuid: friendUuid,
                   value: userUuid
                 }
               })
             })
             this.wsService?.socketClients.delete(userUuid)
-            EmitterService.kafkaEmitter.off(
+            EmitterService.friendEmitter.off(
               'GET_FRIEND_LIST',
               _handleAnUserOffline
             )
           }
-          EmitterService.kafkaEmitter.on(
+          EmitterService.friendEmitter.on(
             'GET_FRIEND_LIST',
             _handleAnUserOffline
           )
-          KafkaService.produceMessageToTopic('friends-service-request', {
+          KafkaService.produceMessageToTopic('FRIEND_TOPIC', {
             key: 'GET_FRIEND_LIST',
             value: {
               requestId: requestId,
               eventName: 'GET_FRIEND_LIST',
-              uuid: userUuid
+              uuid: userUuid,
+              sendByProducer: 'WS_SERVER'
             }
           })
         } catch (error: Error | any) {

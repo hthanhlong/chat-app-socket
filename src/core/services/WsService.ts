@@ -3,6 +3,7 @@ import LoggerService from '../services/LoggerService'
 import { JWT_PAYLOAD } from '../../type'
 import { SOCKET_CHANNEL } from '../../constant'
 import FriendService from './FriendService'
+import NotificationService from './NotificationService'
 // import { MessageService, NotificationService } from '.'
 
 class WsService {
@@ -60,8 +61,8 @@ class WsService {
     payload: {
       eventName: string
       data: {
-        uuid: string
-        value: T
+        sendToUuid: string
+        value?: T
       }
     }
   ) => {
@@ -80,12 +81,12 @@ class WsService {
       })
       return
     }
-    const clients = this.socketClients.get(data.uuid)
+    const clients = this.socketClients.get(data.sendToUuid)
     if (!clients || clients.length === 0) return
     clients.forEach(({ socket }: ISocketInstance) =>
       socket.emit(channel, {
         eventName,
-        data
+        value: data.value
       })
     )
   }
@@ -104,4 +105,5 @@ class WsService {
 
 const wsService = new WsService()
 FriendService.inject(wsService)
+NotificationService.inject(wsService)
 export default wsService

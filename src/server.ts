@@ -8,13 +8,14 @@ import WsService from './core/services/WsService'
 import { JWT_PAYLOAD } from './type'
 import LoggerService from './core/services/LoggerService'
 import KafkaService from './core/services/KafkaService'
-
+import NotificationService from './core/services/NotificationService'
 const main = async () => {
   const app = express()
   const server = createServer(app)
   app.use(helmet())
   LoggerService.init()
   KafkaService.init()
+  NotificationService.init()
   const io = new Server(server, {
     cors: {
       origin: '*',
@@ -54,6 +55,15 @@ const main = async () => {
   LoggerService.info({
     where: 'Server',
     message: `Server running at ${envConfig.SOCKET_PORT}`
+  })
+  process.on('SIGINT', () => {
+    KafkaService.disconnectProducer()
+    KafkaService.disconnectConsumer()
+    LoggerService.info({
+      where: 'Server',
+      message: `Server stopped`
+    })
+    process.exit(0)
   })
 }
 
