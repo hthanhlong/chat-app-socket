@@ -5,9 +5,14 @@ import { SOCKET_CHANNEL } from '../../constant'
 import FriendService from './FriendService'
 import NotificationService from './NotificationService'
 import MessageService from './MessageService'
+import RedisService from './RedisService'
 
 class WsService {
   socketClients: Map<string, ISocketInstance[]> = new Map()
+
+  constructor() {
+    RedisService.listenChannel(RedisService.MESSAGE_CHANNEL)
+  }
 
   onConnection = async (socket: Socket, data: JWT_PAYLOAD) => {
     if (!data.uuid) return

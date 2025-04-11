@@ -3,6 +3,7 @@ import WsService from './WsService'
 import KafkaService from './KafkaService'
 import { v4 as uuidv4 } from 'uuid'
 import EmitterService from './EmitterService'
+import RedisService from './RedisService'
 class MessageService {
   private wsService: typeof WsService = {} as typeof WsService
 
@@ -28,25 +29,13 @@ class MessageService {
   sendMessageToReceiver = (payload: MessagePayload) => {
     const { uuid } = payload
     if (!uuid) return
-    this.wsService.sendDataToClient(SOCKET_CHANNEL.MESSAGE, {
-      eventName: MESSAGE_TYPE.NEW_MESSAGE,
-      data: {
-        sendToUuid: payload.data.receiverUuid,
-        value: payload.data
-      }
-    })
+    RedisService.publishMessage(payload)
   }
 
   sendMessageHasImageToReceiver = (payload: MessagePayload) => {
     const { data } = payload
     if (!data) return
-    this.wsService.sendDataToClient(SOCKET_CHANNEL.MESSAGE, {
-      eventName: MESSAGE_TYPE.NEW_MESSAGE,
-      data: {
-        sendToUuid: data.receiverUuid,
-        value: data
-      }
-    })
+    RedisService.publishMessage(payload)
   }
 
   sendMessageToKafka = (payload: MessagePayload) => {

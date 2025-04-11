@@ -5,7 +5,8 @@ import FriendService from './FriendService'
 import EmitterService from './EmitterService'
 import KafkaService from './KafkaService'
 import NotificationService from './NotificationService'
-// import MessageService from './MessageService'
+import MessageService from './MessageService'
+import RedisService from './RedisService'
 
 export {
   WsService,
@@ -14,6 +15,7 @@ export {
   FriendService,
   EmitterService,
   KafkaService,
-  NotificationService
-  // MessageService
+  NotificationService,
+  MessageService,
+  RedisService
 }
