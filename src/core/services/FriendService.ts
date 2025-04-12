@@ -3,6 +3,7 @@ import {
   EmitterService,
   KafkaService,
   LoggerService,
+  RedisService,
   WsService
 } from '../services'
 import { v4 as uuidv4 } from 'uuid'
@@ -29,26 +30,29 @@ class FriendService {
     }
   }
 
-  getOnlineFriends = (payload: SocketEventPayload<string[]>) => {
+  getOnlineFriends = async (payload: SocketEventPayload<string[]>) => {
     const { data } = payload
     if (!data.value || (Array.isArray(data.value) && data.value.length === 0))
       return
     const onlineFriends: string[] = []
-    const sockets = this.wsService?.socketClients
-    if (!sockets) return
-    data.value.forEach((uuid: string) => {
-      if (sockets?.has(uuid)) {
-        onlineFriends.push(uuid)
+    const onlineUsers = await RedisService.getOnlineUsers()
+    if (!onlineUsers || onlineUsers.length === 0) return
+    data.value.forEach((friendUuid: string) => {
+      if (onlineUsers?.includes(friendUuid)) {
+        onlineFriends.push(friendUuid)
       }
     })
     if (onlineFriends.length === 0) return
-    this.wsService?.sendDataToClient<string[]>(SOCKET_CHANNEL.FRIEND, {
-      eventName: FRIEND_TYPE.GET_ONLINE_FRIEND_LIST,
-      data: {
-        sendToUuid: data.uuid,
-        value: onlineFriends
-      }
-    })
+    RedisService.redisPub.publish(
+      RedisService.HANDLE_MESSAGE_CHANNEL,
+      JSON.stringify({
+        eventName: FRIEND_TYPE.GET_ONLINE_FRIEND_LIST,
+        data: {
+          uuid: data.uuid,
+          value: onlineFriends
+        }
+      })
+    )
   }
 
   handleAnUserOnline = async (payload: SocketEventPayload<string[]>) => {
@@ -60,35 +64,39 @@ class FriendService {
       })
       return
     }
-    if (this.timeoutIds.has(`trigger-online-${data.uuid}`)) {
-      clearTimeout(this.timeoutIds.get(`trigger-online-${data.uuid}`))
+    const { uuid } = data
+    if (this.timeoutIds.has(`trigger-online-${uuid}`)) {
+      clearTimeout(this.timeoutIds.get(`trigger-online-${uuid}`))
     }
-    if (this.timeoutIds.has(`trigger-offline-${data.uuid}`)) {
-      clearTimeout(this.timeoutIds.get(`trigger-offline-${data.uuid}`))
+    if (this.timeoutIds.has(`trigger-offline-${uuid}`)) {
+      clearTimeout(this.timeoutIds.get(`trigger-offline-${uuid}`))
     }
     const TIMEOUT_HANDLE_AN_USER_ONLINE = 10000 // 10 seconds
     try {
-      const timeoutId = setTimeout(() => {
-        const sockets = this.wsService?.socketClients
-        if (!sockets) return
+      const timeoutId = setTimeout(async () => {
+        const onlineUsers = await RedisService.getOnlineUsers()
+        if (!onlineUsers) return
         if (
           !data.value ||
           (Array.isArray(data.value) && data.value.length === 0)
         )
           return
         data.value.forEach((friendUuid: string) => {
-          if (sockets?.has(friendUuid)) {
-            this.wsService?.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
-              eventName: FRIEND_TYPE.HAS_NEW_ONLINE_USER,
-              data: {
-                sendToUuid: friendUuid,
-                value: data.uuid
-              }
-            })
+          if (onlineUsers?.includes(friendUuid)) {
+            RedisService.redisPub.publish(
+              RedisService.HANDLE_MESSAGE_CHANNEL,
+              JSON.stringify({
+                eventName: FRIEND_TYPE.HAS_NEW_ONLINE_USER,
+                data: {
+                  sendToUuid: friendUuid,
+                  value: uuid
+                }
+              })
+            )
           }
         })
       }, TIMEOUT_HANDLE_AN_USER_ONLINE)
-      this.timeoutIds.set(`trigger-online-${data.uuid}`, timeoutId)
+      this.timeoutIds.set(`trigger-online-${uuid}`, timeoutId)
     } catch (error: Error | any) {
       LoggerService.error({
         where: 'WsService',
@@ -120,30 +128,35 @@ class FriendService {
           const userUuid = data.uuid
           const requestId = uuidv4()
 
-          const _handleAnUserOffline = (
+          const _handleAnUserOffline = async (
             payload: EmitterEventPayload & { friendList: string[] }
           ) => {
             if (!payload.requestId || !payload.friendList) return
             if (requestId !== payload.requestId) return
             const friends = payload.friendList
             if (!friends) return
-            const onlineUsers: string[] = []
-            friends.forEach((friendUuid: string) => {
-              if (this.wsService?.socketClients.has(friendUuid)) {
-                onlineUsers.push(friendUuid)
-              }
-            })
-            if (onlineUsers.length === 0) return
-            onlineUsers.forEach((friendUuid: string) => {
-              this.wsService?.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
+            const onlineFriends = await this.getOnlineFriendList(friends)
+            if (!onlineFriends) return
+            RedisService.redisPub.publish(
+              RedisService.HANDLE_MESSAGE_CHANNEL,
+              JSON.stringify({
                 eventName: FRIEND_TYPE.HAS_NEW_OFFLINE_USER,
                 data: {
-                  sendToUuid: friendUuid,
-                  value: userUuid
+                  sendToUuid: userUuid,
+                  value: onlineFriends
                 }
               })
-            })
-            this.wsService?.socketClients.delete(userUuid)
+            )
+            // onlineFriends.forEach((friendUuid: string) => {
+            //   this.wsService?.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
+            //     eventName: FRIEND_TYPE.HAS_NEW_OFFLINE_USER,
+            //     data: {
+            //       sendToUuid: friendUuid,
+            //       value: userUuid
+            //     }
+            //   })
+            // })
+            RedisService.deleteUserFromOnlineList(userUuid)
           }
           EmitterService.friendEmitter.once(
             'GET_FRIEND_LIST',
@@ -172,6 +185,19 @@ class FriendService {
         message: `Error handling an user offline: ${error.message}`
       })
     }
+  }
+
+  getOnlineFriendList = async (friendList: string[]) => {
+    const onlineUsers = await RedisService.getOnlineUsers()
+    if (!onlineUsers) return
+    const onlineFriends: string[] = []
+    friendList.forEach((friendUuid: string) => {
+      if (onlineUsers.includes(friendUuid)) {
+        onlineFriends.push(friendUuid)
+      }
+    })
+    if (onlineFriends.length === 0) return
+    return onlineFriends
   }
 }
 

@@ -1,14 +1,14 @@
 import Redis from 'ioredis'
 import envConfig from '../../config'
 import LoggerService from './LoggerService'
-import { SOCKET_CHANNEL } from '../../constant'
+import { FRIEND_TYPE, SOCKET_CHANNEL } from '../../constant'
 import { MESSAGE_TYPE } from '../../constant'
 import WsService from './WsService'
 class RedisService {
   redisPub!: Redis
   redisSub!: Redis
 
-  MESSAGE_CHANNEL = 'MESSAGE_CHANNEL'
+  HANDLE_MESSAGE_CHANNEL = 'HANDLE_MESSAGE_CHANNEL'
 
   constructor() {
     this.initPub()
@@ -58,18 +58,7 @@ class RedisService {
       process.exit(1)
     })
 
-    this.redisSub.subscribe(this.MESSAGE_CHANNEL, (err) => {
-      if (err) {
-        LoggerService.error({
-          where: 'RedisService',
-          message: 'Redis subscribe error'
-        })
-      }
-      LoggerService.info({
-        where: 'RedisService',
-        message: 'Redis subscribed to MESSAGE_CHANNEL'
-      })
-    })
+    this._subscribe(this.HANDLE_MESSAGE_CHANNEL)
   }
 
   disconnect() {
@@ -81,7 +70,7 @@ class RedisService {
     })
   }
 
-  subscribe(channel: string) {
+  _subscribe(channel: string) {
     this.redisSub.subscribe(channel, (err) => {
       if (err) {
         LoggerService.error({
@@ -89,6 +78,10 @@ class RedisService {
           message: 'Redis subscribe error'
         })
       }
+      LoggerService.info({
+        where: 'RedisService',
+        message: `Redis subscribed to ${channel}`
+      })
     })
   }
 
@@ -104,23 +97,102 @@ class RedisService {
   }
 
   publishMessage(data: unknown) {
-    this.redisPub.publish(this.MESSAGE_CHANNEL, JSON.stringify(data))
+    this.redisPub.publish(this.HANDLE_MESSAGE_CHANNEL, JSON.stringify(data))
   }
 
-  listenChannel(_channel: string) {
+  listenMessageChannel() {
     this.redisSub.on('message', (channel, message) => {
-      if (channel === _channel) {
-        const payload = JSON.parse(message)
-        const { data } = payload
-        WsService.sendDataToClient(SOCKET_CHANNEL.MESSAGE, {
-          eventName: MESSAGE_TYPE.NEW_MESSAGE,
-          data: {
-            sendToUuid: data.receiverUuid,
-            value: data
-          }
-        })
+      if (channel === this.HANDLE_MESSAGE_CHANNEL) {
+        const payload = JSON.parse(message) as SocketEventPayload<unknown>
+        const { eventName, data } = payload
+        if (eventName === MESSAGE_TYPE.NEW_MESSAGE) {
+          WsService.sendDataToClient(SOCKET_CHANNEL.MESSAGE, {
+            eventName,
+            data: {
+              sendToUuid: data.uuid,
+              value: data.value
+            }
+          })
+        }
+        if (eventName === FRIEND_TYPE.GET_ONLINE_FRIEND_LIST) {
+          WsService.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
+            eventName,
+            data: {
+              sendToUuid: data.uuid,
+              value: data.value || []
+            }
+          })
+        }
+        if (eventName === FRIEND_TYPE.HAS_NEW_ONLINE_USER) {
+          WsService.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
+            eventName,
+            data: {
+              sendToUuid: data.uuid,
+              value: data.value || []
+            }
+          })
+        }
+        if (eventName === FRIEND_TYPE.HAS_NEW_OFFLINE_USER) {
+          WsService.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
+            eventName,
+            data: {
+              sendToUuid: data.uuid,
+              value: data.value || []
+            }
+          })
+        }
       }
     })
+  }
+
+  async addUserToOnlineList(uuid: string, socketId: string) {
+    if (!uuid) {
+      LoggerService.error({
+        where: 'RedisService',
+        message: 'Redis addUserToOnlineList error'
+      })
+      return
+    }
+
+    const existing = await this.redisPub.hget('online-users', uuid)
+    const existingSet = new Set(existing ? JSON.parse(existing) : [])
+
+    existingSet.add(socketId)
+
+    await this.redisPub.hset(
+      'online-users',
+      uuid,
+      JSON.stringify([...existingSet])
+    )
+  }
+
+  async getOnlineUsers() {
+    const allUsers = await this.redisPub.hgetall('online-users')
+    if (!allUsers || Object.keys(allUsers).length === 0) {
+      return []
+    }
+    console.log('allUsers', allUsers)
+    console.log('Object.keys(allUsers)', Object.keys(allUsers))
+    return Object.keys(allUsers)
+  }
+
+  async getSocketIdsOfAnOnlineUser(uuid: string) {
+    const data = await this.redisPub.hget('online-users', uuid)
+    if (!data) return []
+
+    try {
+      return JSON.parse(data)
+    } catch (error) {
+      LoggerService.error({
+        where: 'RedisService',
+        message: `Lỗi parse socketId: ${error}`
+      })
+      return []
+    }
+  }
+
+  deleteUserFromOnlineList(uuid: string) {
+    this.redisPub.hdel('online-users', uuid)
   }
 }
 

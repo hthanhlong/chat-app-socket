@@ -8,10 +8,10 @@ import MessageService from './MessageService'
 import RedisService from './RedisService'
 
 class WsService {
-  socketClients: Map<string, ISocketInstance[]> = new Map()
+  localSocketClients: Map<string, ISocketInstance[]> = new Map()
 
   constructor() {
-    RedisService.listenChannel(RedisService.MESSAGE_CHANNEL)
+    RedisService.listenMessageChannel()
   }
 
   onConnection = async (socket: Socket, data: JWT_PAYLOAD) => {
@@ -31,29 +31,30 @@ class WsService {
 
   socketRegister = (socket: Socket, data: JWT_PAYLOAD) => {
     return new Promise((resolve, reject) => {
-      if (!this.socketClients.has(data.uuid)) {
-        this.socketClients.set(data.uuid, [
+      if (!this.localSocketClients.has(data.uuid)) {
+        this.localSocketClients.set(data.uuid, [
           {
             id: socket.id,
             socket
           }
         ])
       } else {
-        this.socketClients.get(data.uuid)?.push({
+        this.localSocketClients.get(data.uuid)?.push({
           id: socket.id,
           socket
         })
       }
+      RedisService.addUserToOnlineList(data.uuid, socket.id)
       resolve(true)
     })
   }
 
-  getSocketClients = () => {
-    return this.socketClients
+  getLocalSocketClients = () => {
+    return this.localSocketClients
   }
 
   deleteSocketClient = (uuid: string) => {
-    this.socketClients.delete(uuid)
+    this.localSocketClients.delete(uuid)
   }
 
   sendDataToClient = <T>(
@@ -81,7 +82,7 @@ class WsService {
       })
       return
     }
-    const clients = this.socketClients.get(data.sendToUuid)
+    const clients = this.localSocketClients.get(data.sendToUuid)
     if (!clients || clients.length === 0) return
     clients.forEach(({ socket }: ISocketInstance) =>
       socket.emit(channel, {
