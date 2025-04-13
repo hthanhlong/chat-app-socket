@@ -9,6 +9,7 @@ import { JWT_PAYLOAD } from './type'
 import LoggerService from './core/services/LoggerService'
 import KafkaService from './core/services/KafkaService'
 import NotificationService from './core/services/NotificationService'
+
 const main = async () => {
   const app = express()
   const server = createServer(app)

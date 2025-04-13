@@ -142,21 +142,11 @@ class FriendService {
               JSON.stringify({
                 eventName: FRIEND_TYPE.HAS_NEW_OFFLINE_USER,
                 data: {
-                  sendToUuid: userUuid,
+                  uuid: userUuid,
                   value: onlineFriends
                 }
               })
             )
-            // onlineFriends.forEach((friendUuid: string) => {
-            //   this.wsService?.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
-            //     eventName: FRIEND_TYPE.HAS_NEW_OFFLINE_USER,
-            //     data: {
-            //       sendToUuid: friendUuid,
-            //       value: userUuid
-            //     }
-            //   })
-            // })
-            RedisService.deleteUserFromOnlineList(userUuid)
           }
           EmitterService.friendEmitter.once(
             'GET_FRIEND_LIST',

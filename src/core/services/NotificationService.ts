@@ -1,6 +1,7 @@
 import EmitterService from './EmitterService'
 import WsService from './WsService'
 import { SOCKET_CHANNEL, NOTIFICATION_TYPE } from '../../constant'
+import RedisService from './RedisService'
 class NotificationService {
   private wsService: typeof WsService = {} as typeof WsService
 
@@ -17,15 +18,19 @@ class NotificationService {
 
   handleHasNewNotification = (payload: EmitterEventPayload) => {
     const { uuid } = payload
-    this.wsService.sendDataToClient(SOCKET_CHANNEL.NOTIFICATION, {
-      eventName: NOTIFICATION_TYPE.HAS_NEW_NOTIFICATION,
-      data: {
-        sendToUuid: uuid,
-        value: {
-          uuid
+
+    RedisService.redisPub.publish(
+      RedisService.HANDLE_MESSAGE_CHANNEL,
+      JSON.stringify({
+        eventName: NOTIFICATION_TYPE.HAS_NEW_NOTIFICATION,
+        data: {
+          sendToUuid: uuid,
+          value: {
+            uuid
+          }
         }
-      }
-    })
+      })
+    )
   }
 }
 

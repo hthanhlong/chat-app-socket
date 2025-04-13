@@ -1,7 +1,7 @@
 import Redis from 'ioredis'
 import envConfig from '../../config'
 import LoggerService from './LoggerService'
-import { FRIEND_TYPE, SOCKET_CHANNEL } from '../../constant'
+import { FRIEND_TYPE, NOTIFICATION_TYPE, SOCKET_CHANNEL } from '../../constant'
 import { MESSAGE_TYPE } from '../../constant'
 import WsService from './WsService'
 class RedisService {
@@ -103,41 +103,133 @@ class RedisService {
   listenMessageChannel() {
     this.redisSub.on('message', (channel, message) => {
       if (channel === this.HANDLE_MESSAGE_CHANNEL) {
-        const payload = JSON.parse(message) as SocketEventPayload<unknown>
-        const { eventName, data } = payload
+        const payload = JSON.parse(message)
+        const { eventName } = payload
         if (eventName === MESSAGE_TYPE.NEW_MESSAGE) {
+          const _payload = payload as {
+            eventName: string
+            requestId: string
+            uuid: string
+            sendByProducer: string
+            data: {
+              receiverUuid: string
+              message: string
+              senderUuid: string
+              file: string
+              uuid: string
+              createdAt: string
+            }
+          }
           WsService.sendDataToClient(SOCKET_CHANNEL.MESSAGE, {
             eventName,
             data: {
-              sendToUuid: data.uuid,
-              value: data.value
+              sendToUuid: _payload.data.receiverUuid,
+              value: {
+                createdAt: _payload.data.createdAt,
+                message: _payload.data.message,
+                senderUuid: _payload.data.senderUuid,
+                file: _payload.data.file,
+                uuid: _payload.data.uuid
+              }
+            }
+          })
+        }
+
+        if (eventName === MESSAGE_TYPE.NEW_MESSAGE_HAS_IMAGE) {
+          const _payload = payload as {
+            eventName: string
+            requestId: string
+            uuid: string
+            sendByProducer: string
+            data: {
+              receiverUuid: string
+              message: string
+              senderUuid: string
+              file: string
+              uuid: string
+              createdAt: string
+            }
+          }
+          WsService.sendDataToClient(SOCKET_CHANNEL.MESSAGE, {
+            eventName: MESSAGE_TYPE.NEW_MESSAGE,
+            data: {
+              sendToUuid: _payload.data.receiverUuid,
+              value: {
+                createdAt: _payload.data.createdAt,
+                message: _payload.data.message,
+                senderUuid: _payload.data.senderUuid,
+                file: _payload.data.file,
+                uuid: _payload.data.uuid
+              }
             }
           })
         }
         if (eventName === FRIEND_TYPE.GET_ONLINE_FRIEND_LIST) {
+          const _payload = payload as {
+            eventName: string
+            data: {
+              uuid: string
+              value: string[]
+            }
+          }
           WsService.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
             eventName,
             data: {
-              sendToUuid: data.uuid,
-              value: data.value || []
+              sendToUuid: _payload.data.uuid,
+              value: _payload.data.value || []
             }
           })
         }
         if (eventName === FRIEND_TYPE.HAS_NEW_ONLINE_USER) {
+          const _payload = payload as {
+            eventName: string
+            data: {
+              sendToUuid: string
+              value: string
+            }
+          }
           WsService.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
             eventName,
             data: {
-              sendToUuid: data.uuid,
-              value: data.value || []
+              sendToUuid: _payload.data.sendToUuid,
+              value: _payload.data.value
             }
           })
         }
         if (eventName === FRIEND_TYPE.HAS_NEW_OFFLINE_USER) {
-          WsService.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
+          const _payload = payload as {
+            eventName: string
+            data: {
+              uuid: string
+              value: string[]
+            }
+          }
+          const onlineFriends = _payload.data.value
+          if (!onlineFriends) return
+          onlineFriends.forEach((friendUuid: string) => {
+            WsService.sendDataToClient(SOCKET_CHANNEL.FRIEND, {
+              eventName,
+              data: {
+                sendToUuid: friendUuid,
+                value: _payload.data.uuid
+              }
+            })
+          })
+          this.deleteUserFromOnlineList(payload.data.uuid)
+        }
+        if (eventName === NOTIFICATION_TYPE.HAS_NEW_NOTIFICATION) {
+          const _payload = payload as {
+            eventName: string
+            data: {
+              sendToUuid: string
+              value: string
+            }
+          }
+          WsService.sendDataToClient(SOCKET_CHANNEL.NOTIFICATION, {
             eventName,
             data: {
-              sendToUuid: data.uuid,
-              value: data.value || []
+              sendToUuid: _payload.data.sendToUuid,
+              value: _payload.data.value
             }
           })
         }
@@ -171,8 +263,6 @@ class RedisService {
     if (!allUsers || Object.keys(allUsers).length === 0) {
       return []
     }
-    console.log('allUsers', allUsers)
-    console.log('Object.keys(allUsers)', Object.keys(allUsers))
     return Object.keys(allUsers)
   }
 
