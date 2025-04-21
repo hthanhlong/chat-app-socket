@@ -1,4 +1,4 @@
-import { MESSAGE_TYPE, SOCKET_CHANNEL } from '../../constant'
+import { MESSAGE_TYPE } from '../../constant'
 import WsService from './WsService'
 import KafkaService from './KafkaService'
 import { v4 as uuidv4 } from 'uuid'

@@ -3,6 +3,7 @@
     "module": "CommonJS",
     "target": "ES2020",
     "esModuleInterop": true,
+    "noEmit": true,
     "allowJs": false,
     "strictNullChecks": true,
     "noImplicitAny": true,
@@ -19,5 +20,5 @@
     }
   },
   "include": ["src/**/*.ts", "src/types.d.ts"],
-  "exclude": [".templates"]
+  "exclude": ["node_modules", "dist"]
 }
