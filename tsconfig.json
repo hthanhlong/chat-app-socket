@@ -3,7 +3,7 @@
     "module": "CommonJS",
     "target": "ES2020",
     "esModuleInterop": true,
-    "noEmit": true,
+    "noEmitOnError": true,
     "allowJs": false,
     "strictNullChecks": true,
     "noImplicitAny": true,

@@ -1,0 +1,22 @@
+version: '3'
+services:
+  chat-app-socket:
+    container_name: chat-app-socket
+    build:
+      context: .
+      dockerfile: dockerfile
+      target: development
+    image: chat-app-socket:latest
+    env_file:
+      - .env
+    ports:
+      - '${SOCKET_PORT}:${SOCKET_PORT}'
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - chat-app-backend_app-network
+
+networks:
+  chat-app-backend_app-network:
+    external: true

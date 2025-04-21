@@ -3,6 +3,7 @@ import express from 'express'
 import helmet from 'helmet'
 import { Server, Socket } from 'socket.io'
 import envConfig from './config'
+import cors from 'cors'
 import JWTService from './core/services/JWTService'
 import WsService from './core/services/WsService'
 import { JWT_PAYLOAD } from './type'
@@ -13,6 +14,7 @@ import NotificationService from './core/services/NotificationService'
 const main = async () => {
   const app = express()
   const server = createServer(app)
+  app.use(cors(envConfig.CORS_OPTIONS))
   app.use(helmet())
   LoggerService.init()
   KafkaService.init()

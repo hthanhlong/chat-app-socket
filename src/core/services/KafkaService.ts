@@ -1,6 +1,7 @@
 import { Kafka, Producer, Consumer } from 'kafkajs'
 import LoggerService from './LoggerService'
 import EmitterService from './EmitterService'
+import envConfig from '../../config'
 
 class KafkaService {
   kafka: Kafka | undefined
@@ -10,9 +11,10 @@ class KafkaService {
   messageConsumer: Consumer | undefined
 
   init() {
+    const kafkaHost = envConfig.KAFKA_BROKER_HOST
     this.kafka = new Kafka({
       clientId: 'chat-app',
-      brokers: ['localhost:19092']
+      brokers: [kafkaHost]
     })
     this.kafkaProducer = this.initProducer()
     this.friendConsumer = this.initConsumer('ws-friend-group')

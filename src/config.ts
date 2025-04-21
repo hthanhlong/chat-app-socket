@@ -18,8 +18,8 @@ class EnvConfig {
   CORS_OPTIONS = {
     origin: process.env.CORS_URL || '*',
     methods: 'GET,POST,PUT,PATCH,DELETE',
-    allowedHeaders: 'Content-Type,Authorization,X-Requested-With'
-    // credentials: true // Allow credential
+    allowedHeaders: 'Content-Type,Authorization,X-Requested-With',
+    credentials: true // Allow credential
   }
 
   JSON_LIMIT = '10mb'
@@ -42,6 +42,7 @@ class EnvConfig {
   REDIS_HOST = process.env.REDIS_HOST || 'localhost'
   REDIS_URL = `redis://${this.REDIS_HOST}:${this.REDIS_PORT}`
   LOG_DIR = process.env.LOG_DIR || 'logs'
+  KAFKA_BROKER_HOST = process.env.KAFKA_BROKER_HOST || 'localhost:9092'
 }
 
 const envConfig = new EnvConfig()

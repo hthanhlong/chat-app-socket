@@ -1,1 +1,0 @@
-docker run -p 8084:8084 chat-app-socket
