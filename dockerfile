@@ -1,5 +1,5 @@
 # Use Node.js LTS (Long Term Support) as the base image
-FROM node:22.14.0-alpine as Production
+FROM node:22.14.0-alpine AS Production
 
 # Create app directory
 WORKDIR /app
@@ -21,7 +21,7 @@ RUN npm run build-ts
 CMD [ "npm", "run", "prod" ]
 
 
-FROM node:22.14.0-alpine as Development
+FROM node:22.14.0-alpine AS Development
 
 WORKDIR /app
 

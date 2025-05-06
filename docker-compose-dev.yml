@@ -4,12 +4,15 @@ services:
     container_name: chat-app-socket
     build:
       context: .
-      target: production
+      target: development
     image: chat-app-socket:latest
     env_file:
       - .env
     ports:
       - '${SOCKET_PORT}:${SOCKET_PORT}'
+    volumes:
+      - .:/app
+      - /app/node_modules
     networks:
       - chat-app-backend_app-network
 
